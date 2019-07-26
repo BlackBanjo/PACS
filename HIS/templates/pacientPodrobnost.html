@@ -1,0 +1,13 @@
+{% extends 'osnova.html' %}
+{% block content %}
+
+    <h1>Pacient</h1>
+<p><b>Ime:</b> {{ pacient.ime }}
+<b>Priimek:</b> {{ pacient.priimek }}</p>
+<p><b>Spol: </b> {{ pacient.spol }}</p>
+<p><b>Datum rojstva: </b> {{ pacient.rojstniDatum.day }}. {{ pacient.rojstniDatum.month }}. {{ pacient.rojstniDatum.year }}</p>
+<p><b>EMSO: </b> {{ pacient.emso }}</p>
+<p><b>Mesto: </b> {{ pacient.mesto.mesto }} <b>Poštna številka: </b> {{ pacient.mesto.postnaStevilka }} </p>
+<p><b>Naslov: </b> {{ pacient.ulica }}</p>
+<p><a href="{% url 'pregledForm' pacient.id %}">Ustvari pregled</a></p>
+{% endblock %}

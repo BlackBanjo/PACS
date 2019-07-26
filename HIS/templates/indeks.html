@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{% load static %}
+
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="{% static 'style.css' %}">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="column">
+            <div class="form-group text-center">
+                {% if form.errors %}
+                    <p>Napačno uporabniško ime ali geslo</p>
+                {% endif %}
+                <div>
+                    <form method="POST" action="/HIS/auth/" class=".form-horizontal" > {% csrf_token %}
+                        <label>Uporabniško ime: <input class="form-control" name="username" type="text" placeholder="Vnesite upor. ime" required /></label><br>
+                        <label>Geslo: <input class="form-control" name="password" type="password" placeholder="Vnesite geslo" required /></label>
+                        <br>
+                        <label><input  class="form-control" type="submit" value="Prijavi se" /></label>
+                    </form>
+                </div>
+                {% if messages %}
+                <ul class="messages">
+                    {% for message in messages %}
+                    <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+</body>
+</html>

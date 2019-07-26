@@ -1,0 +1,22 @@
+{% extends 'osnova.html' %}
+{% block content %}
+
+    <h1>Pregled</h1>
+    <form method="POST" class="post-form">{% csrf_token %}
+        <div class="fieldWrapper">
+            <table>
+            {{ form.tipSlikanja.error }}
+            {% for id_tipSlikanja in form.tipSlikanja %}
+                {% if forloop.counter0|divisibleby:"4" %}
+                    <tr>
+                {% elif forloop.counter0|divisibleby:"4" %}
+                    </tr>
+                {% endif %}
+                <td>{{ id_tipSlikanja }}</td>
+
+            {% endfor %}
+            </table>
+        </div>
+        <button type="submit" class="save btn btn-default">Shrani</button>
+    </form>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends 'osnova.html' %}
+{% block content %}
+
+    <h1>Pregled {{ pregled.id }}</h1>
+<p><b>Ime pacienta:</b> {{ pregled.pacient.ime }} {{ pregled.pacient.priimek }}</p>
+<p><b>Datum nastanka pregleda: </b> {{ pregled.datumNastanka.day }}. {{ pregled.datumNastanka.month }}. {{ pregled.datumNastanka.year }}</p>
+<p><b>Vrsta pregleda: </b></p>
+{% for tip in pregled.tipSlikanja.all %}
+<p>{{ tip }}</p>
+{% endfor %}
+<p>Ogled pacienta: <td><a href="{% url 'pacient' pregled.pacient.id %}">ogled</a></td></p>
+<p><a href="{% url 'pregledSpremeni' pregled.id %}">Spremeni pregled</a></p> <p><a href="{% url 'pregledIzbrisi' pregled.id %}">Izbriši pregled</a></p>
+{% endblock %}

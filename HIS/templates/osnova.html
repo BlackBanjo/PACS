@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+{% load static %}
+
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="{% static 'style.css' %}">
+</head>
+<body>
+    <div class="container-fluid">
+        <a href="{% url 'pacientForm' %}" class="btn btn-default">Dodaj pacienta</a> <a href="{% url 'seznam_pacientov' %}" class="btn btn-default">Seznam pacientov</a> <a href="{% url 'seznam_pregledov' %}" class="btn btn-default">Seznam pregledov</a> <div class="float-right"><a href="{% url 'odjava' %}" class="btn btn-default">Izpis</a></div> <div class="float-right"><a href="admin" class="btn btn-default">Administrator</a></div>
+    <hr>
+    </div>
+    <div class="container-fluid">
+        <div class="column">
+            {% block content %}
+            {% endblock %}
+        </div>
+    </div>
+</body>
+</html>
