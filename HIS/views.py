@@ -8,7 +8,9 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import auth, messages
 from django.http import HttpResponseRedirect
 import datetime
-from pynetdicom import AE, VerificationPresentationContexts
+
+from hl7apy import core
+from hl7 import client
 
 from .form import *
 from .models import *
@@ -20,19 +22,31 @@ global port_Strani
 global IP_Server
 global port_Server
 global naslovAE_Server
+global hl7_remove
 nazivOrganizacije = "bolnica"
 naslovAE_Strani = "RIS"
 port_Strani = 2000
-IP_Server = "57.12.3.12"
-port_Server = 1000
+IP_Server = "localhost"
+port_Server = 8080
 naslovAE_Server = "PACS"
 
-#ae = AE()
-#ae.requested_contexts = VerificationPresentationContexts
-#assoc = ae.associate(IP_Server, port_Server, naslovAE_Server)
+global pregled_odstrani
+pregled_odstrani = ""
 
-global stevec
-stevec = 0
+
+def zacniHL7():
+    hl = core.Message("ORM_O01")
+    hl.msh.msh_4 = nazivOrganizacije
+    hl.msh.msh_9 = "ORM^O01"
+    hl.msh.msh_10 = "168715"
+    hl.msh.msh_11 = "P"
+    return hl
+
+def posljiSporocilo(sporocilo):
+    with (client.MLLPClient(IP_Server, port_Server)) as nov:
+        nov.send_message(sporocilo)
+        nov.close()
+    return
 
 def index(request):
     template_name = 'indeks.html'
@@ -91,7 +105,29 @@ def pregledForm(request, pk):
             pregled = form.save(commit=True)
             pregled.pregledDatum = timezone.now()
             pregled.pacient = dobi_pacienta
+
+            #dodaj novo
+            hl_sporocilo = zacniHL7()
+            hl_sporocilo.add_group("ORM_O01_ORDER")
+            hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "NW"
+            hl_sporocilo.ORM_O01_ORDER.ORC.orc_2 = "ORD-" + str(pregled.id)
+            hl_sporocilo.ORM_O01_ORDER.ORC.orc_3 = "ORD-" + str(pregled.id)
+
+            hl_sporocilo.add_group("ORM_O01_PATIENT")
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = dobi_pacienta.priimek + '^' + dobi_pacienta.ime
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_6 = str(dobi_pacienta.rojstniDatum.year) + str(dobi_pacienta.rojstniDatum.month) + str(dobi_pacienta.rojstniDatum.day)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
+
+            for slikanje in pregled.tipSlikanja.all():
+                obr = core.Segment('OBR')
+                obr.obr_4 = slikanje.koda
+                obr.obr_39 = slikanje.opis
+                hl_sporocilo.add(obr)
+
+            posljiSporocilo(hl_sporocilo)
             pregled.save()
+
             return redirect('/seznamPregledov')
     else:
         form = PregledForm()
@@ -99,24 +135,100 @@ def pregledForm(request, pk):
 
 
 def pregledSpremeni(request, pk):
+    global pregled_odstrani
     template_name = 'pregledForm.html'
     pregled = get_object_or_404(Pregled, id=pk)
+
+    print(pregled.id)
     if request.method == "POST":
         form = PregledForm(request.POST, instance=pregled)
         if form.is_valid():
             pregled = form.save(commit=True)
             pregled.pregledDatum = timezone.now()
+            dobi_pacienta = pregled.pacient
+
+            #izbrisi staro
+            hl_sporocilo = zacniHL7()
+            hl_sporocilo.add_group("ORM_O01_ORDER")
+            hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "CA"
+            hl_sporocilo.ORM_O01_ORDER.ORC.orc_2 = "ORD-" + str(pregled_odstrani.id)
+            hl_sporocilo.ORM_O01_ORDER.ORC.orc_3 = "ORD-" + str(pregled_odstrani.id)
+
+            hl_sporocilo.add_group("ORM_O01_PATIENT")
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = dobi_pacienta.priimek + '^' + dobi_pacienta.ime
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_6 = str(dobi_pacienta.rojstniDatum.year) + str(dobi_pacienta.rojstniDatum.month) + str(dobi_pacienta.rojstniDatum.day)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
+
+            for slikanje in pregled_odstrani.tipSlikanja.all():
+                obr = core.Segment('OBR')
+                obr.obr_4 = slikanje.koda
+                obr.obr_39 = slikanje.opis
+                hl_sporocilo.add(obr)
+
+            posljiSporocilo(hl_sporocilo)
+            #print(hl_sporocilo.to_er7().replace('\r','\n'))
+
+            #dodaj novo
+            hl_sporocilo = zacniHL7()
+            hl_sporocilo.add_group("ORM_O01_ORDER")
+            hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "NW"
+            hl_sporocilo.ORM_O01_ORDER.ORC.orc_2 = "ORD-" + str(pregled.id)
+            hl_sporocilo.ORM_O01_ORDER.ORC.orc_3 = "ORD-" + str(pregled.id)
+
+            hl_sporocilo.add_group("ORM_O01_PATIENT")
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = dobi_pacienta.priimek + '^' + dobi_pacienta.ime
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_6 = str(dobi_pacienta.rojstniDatum.year) + str(dobi_pacienta.rojstniDatum.month) + str(dobi_pacienta.rojstniDatum.day)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
+
+            for slikanje in pregled.tipSlikanja.all():
+                obr = core.Segment('OBR')
+                obr.obr_4 = slikanje.koda
+                obr.obr_39 = slikanje.opis
+                hl_sporocilo.add(obr)
+
+            posljiSporocilo(hl_sporocilo)
+            #print(hl_sporocilo.to_er7().replace('\r','\n'))
             pregled.save()
+
             return redirect('/seznamPregledov')
     else:
         form = PregledForm(instance=pregled)
+        pregled_odstrani = pregled
     return render(request, template_name, {'form': form})
 
 
 def pregledIzbrisi(request, pk):
     template_name = 'izbrisano.html'
-    pregled = Pregled.objects.filter(id=pk)
+    pregled = get_object_or_404(Pregled, id=pk)
+    dobi_pacienta = pregled.pacient
+
+    #izbrisi
+    hl_sporocilo = zacniHL7()
+    hl_sporocilo.add_group("ORM_O01_ORDER")
+    hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "NW"
+    hl_sporocilo.ORM_O01_ORDER.ORC.orc_2 = "ORD-" + str(pregled.id)
+    hl_sporocilo.ORM_O01_ORDER.ORC.orc_3 = "ORD-" + str(pregled.id)
+
+    hl_sporocilo.add_group("ORM_O01_PATIENT")
+    hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
+    hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = dobi_pacienta.priimek + '^' + dobi_pacienta.ime
+    hl_sporocilo.ORM_O01_PATIENT.pid.pid_6 = str(dobi_pacienta.rojstniDatum.year) + str(
+        dobi_pacienta.rojstniDatum.month) + str(dobi_pacienta.rojstniDatum.day)
+    hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
+
+    for slikanje in pregled.tipSlikanja.all():
+        obr = core.Segment('OBR')
+        obr.obr_4 = slikanje.koda
+        obr.obr_39 = slikanje.opis
+        hl_sporocilo.add(obr)
+
+    posljiSporocilo(hl_sporocilo)
+    #print(hl_sporocilo.to_er7().replace('\r','\n'))
+
     pregled.delete()
+
     return render(request, template_name)
 
 
