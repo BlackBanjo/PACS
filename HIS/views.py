@@ -10,6 +10,7 @@ from django.http import HttpResponseRedirect
 import datetime
 
 from hl7apy import core
+import hl7
 from hl7 import client
 
 from .form import *
@@ -26,9 +27,9 @@ global hl7_remove
 nazivOrganizacije = "bolnica"
 naslovAE_Strani = "RIS"
 port_Strani = 2000
-IP_Server = "localhost"
-port_Server = 8080
-naslovAE_Server = "PACS"
+IP_Server = "192.168.0.0"
+port_Server = 2575
+naslovAE_Server = "dcm4chee"
 
 global pregled_odstrani
 pregled_odstrani = ""
@@ -37,16 +38,24 @@ pregled_odstrani = ""
 def zacniHL7():
     hl = core.Message("ORM_O01")
     hl.msh.msh_4 = nazivOrganizacije
+    #hl.msh.msh_7 = "2019070210"
     hl.msh.msh_9 = "ORM^O01"
-    hl.msh.msh_10 = "168715"
+    hl.msh.msh_10 = "1562055281682557"
     hl.msh.msh_11 = "P"
+    hl.msh.msh_12 = "12.5"
     return hl
 
 def posljiSporocilo(sporocilo):
+    temp = sporocilo.to_er7()
+    temp_sporocilo = hl7.parse(temp)
+    print(temp.replace('\r','\n'))
+    print(len(temp_sporocilo))
+    #print(sporocilo.validate())
     with (client.MLLPClient(IP_Server, port_Server)) as nov:
-        nov.send_message(sporocilo)
+        nov.send_message(temp_sporocilo)
         nov.close()
     return
+
 
 def index(request):
     template_name = 'indeks.html'
@@ -108,21 +117,22 @@ def pregledForm(request, pk):
 
             #dodaj novo
             hl_sporocilo = zacniHL7()
+            hl_sporocilo.add_group("ORM_O01_PATIENT")
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = '^' + str(dobi_pacienta.id)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_7 = str(dobi_pacienta.rojstniDatum.year) + '{:02d}'.format(dobi_pacienta.rojstniDatum.month) + '{:02d}'.format(dobi_pacienta.rojstniDatum.day) + "000000+0100"
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
+
             hl_sporocilo.add_group("ORM_O01_ORDER")
             hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "NW"
             hl_sporocilo.ORM_O01_ORDER.ORC.orc_2 = "ORD-" + str(pregled.id)
             hl_sporocilo.ORM_O01_ORDER.ORC.orc_3 = "ORD-" + str(pregled.id)
 
-            hl_sporocilo.add_group("ORM_O01_PATIENT")
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = dobi_pacienta.priimek + '^' + dobi_pacienta.ime
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_6 = str(dobi_pacienta.rojstniDatum.year) + str(dobi_pacienta.rojstniDatum.month) + str(dobi_pacienta.rojstniDatum.day)
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
-
             for slikanje in pregled.tipSlikanja.all():
                 obr = core.Segment('OBR')
-                obr.obr_4 = slikanje.koda
+                obr.obr_4 = str(slikanje.koda) + '^' + slikanje.opis + ' (' + str(slikanje.SPS_koda) + ')'
                 obr.obr_39 = slikanje.opis
+                obr.obr_43 = '^' + dobi_pacienta.priimek + ',' + dobi_pacienta.ime
                 hl_sporocilo.add(obr)
 
             posljiSporocilo(hl_sporocilo)
@@ -147,45 +157,27 @@ def pregledSpremeni(request, pk):
             pregled.pregledDatum = timezone.now()
             dobi_pacienta = pregled.pacient
 
-            #izbrisi staro
-            hl_sporocilo = zacniHL7()
-            hl_sporocilo.add_group("ORM_O01_ORDER")
-            hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "CA"
-            hl_sporocilo.ORM_O01_ORDER.ORC.orc_2 = "ORD-" + str(pregled_odstrani.id)
-            hl_sporocilo.ORM_O01_ORDER.ORC.orc_3 = "ORD-" + str(pregled_odstrani.id)
-
-            hl_sporocilo.add_group("ORM_O01_PATIENT")
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = dobi_pacienta.priimek + '^' + dobi_pacienta.ime
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_6 = str(dobi_pacienta.rojstniDatum.year) + str(dobi_pacienta.rojstniDatum.month) + str(dobi_pacienta.rojstniDatum.day)
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
-
-            for slikanje in pregled_odstrani.tipSlikanja.all():
-                obr = core.Segment('OBR')
-                obr.obr_4 = slikanje.koda
-                obr.obr_39 = slikanje.opis
-                hl_sporocilo.add(obr)
-
-            posljiSporocilo(hl_sporocilo)
+            posljiSporocilo(pregled_odstrani)
             #print(hl_sporocilo.to_er7().replace('\r','\n'))
 
             #dodaj novo
             hl_sporocilo = zacniHL7()
+            hl_sporocilo.add_group("ORM_O01_PATIENT")
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = '^' + str(dobi_pacienta.id)
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_7 = str(dobi_pacienta.rojstniDatum.year) + '{:02d}'.format(dobi_pacienta.rojstniDatum.month) + '{:02d}'.format(dobi_pacienta.rojstniDatum.day) + "000000+0100"
+            hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
+
             hl_sporocilo.add_group("ORM_O01_ORDER")
             hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "NW"
             hl_sporocilo.ORM_O01_ORDER.ORC.orc_2 = "ORD-" + str(pregled.id)
             hl_sporocilo.ORM_O01_ORDER.ORC.orc_3 = "ORD-" + str(pregled.id)
 
-            hl_sporocilo.add_group("ORM_O01_PATIENT")
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = dobi_pacienta.priimek + '^' + dobi_pacienta.ime
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_6 = str(dobi_pacienta.rojstniDatum.year) + str(dobi_pacienta.rojstniDatum.month) + str(dobi_pacienta.rojstniDatum.day)
-            hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
-
             for slikanje in pregled.tipSlikanja.all():
                 obr = core.Segment('OBR')
-                obr.obr_4 = slikanje.koda
+                obr.obr_4 = str(slikanje.koda) + '^' + slikanje.opis + ' (' + str(slikanje.SPS_koda) + ')'
                 obr.obr_39 = slikanje.opis
+                obr.obr_43 = '^' + dobi_pacienta.priimek + ',' + dobi_pacienta.ime
                 hl_sporocilo.add(obr)
 
             posljiSporocilo(hl_sporocilo)
@@ -195,7 +187,27 @@ def pregledSpremeni(request, pk):
             return redirect('/seznamPregledov')
     else:
         form = PregledForm(instance=pregled)
-        pregled_odstrani = pregled
+        dobi_pacienta = pregled.pacient
+        #izbrisi staro
+        hl_sporocilo = zacniHL7()
+        hl_sporocilo.add_group("ORM_O01_PATIENT")
+        hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
+        hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = '^' + str(dobi_pacienta.id)
+        hl_sporocilo.ORM_O01_PATIENT.pid.pid_7 = str(dobi_pacienta.rojstniDatum.year) + '{:02d}'.format(dobi_pacienta.rojstniDatum.month) + '{:02d}'.format(dobi_pacienta.rojstniDatum.day) + "000000+0100"
+        hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
+
+        hl_sporocilo.add_group("ORM_O01_ORDER")
+        hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "CA"
+        hl_sporocilo.ORM_O01_ORDER.ORC.orc_2 = "ORD-" + str(pregled.id)
+        hl_sporocilo.ORM_O01_ORDER.ORC.orc_3 = "ORD-" + str(pregled.id)
+
+        for slikanje in pregled.tipSlikanja.all():
+            obr = core.Segment('OBR')
+            obr.obr_4 = str(slikanje.koda) + '^' + slikanje.opis + ' (' + str(slikanje.SPS_koda) + ')'
+            obr.obr_39 = slikanje.opis
+            obr.obr_43 = '^' + dobi_pacienta.priimek + ',' + dobi_pacienta.ime
+            hl_sporocilo.add(obr)
+        pregled_odstrani = hl_sporocilo
     return render(request, template_name, {'form': form})
 
 
@@ -206,22 +218,22 @@ def pregledIzbrisi(request, pk):
 
     #izbrisi
     hl_sporocilo = zacniHL7()
+    hl_sporocilo.add_group("ORM_O01_PATIENT")
+    hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
+    hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = '^' + str(dobi_pacienta.id)
+    hl_sporocilo.ORM_O01_PATIENT.pid.pid_7 = str(dobi_pacienta.rojstniDatum.year) + '{:02d}'.format(dobi_pacienta.rojstniDatum.month) + '{:02d}'.format(dobi_pacienta.rojstniDatum.day) + "000000+0100"
+    hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
+
     hl_sporocilo.add_group("ORM_O01_ORDER")
-    hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "NW"
+    hl_sporocilo.ORM_O01_ORDER.ORC.orc_1 = "CA"
     hl_sporocilo.ORM_O01_ORDER.ORC.orc_2 = "ORD-" + str(pregled.id)
     hl_sporocilo.ORM_O01_ORDER.ORC.orc_3 = "ORD-" + str(pregled.id)
 
-    hl_sporocilo.add_group("ORM_O01_PATIENT")
-    hl_sporocilo.ORM_O01_PATIENT.pid.pid_3 = str(dobi_pacienta.id)
-    hl_sporocilo.ORM_O01_PATIENT.pid.pid_5 = dobi_pacienta.priimek + '^' + dobi_pacienta.ime
-    hl_sporocilo.ORM_O01_PATIENT.pid.pid_6 = str(dobi_pacienta.rojstniDatum.year) + str(
-        dobi_pacienta.rojstniDatum.month) + str(dobi_pacienta.rojstniDatum.day)
-    hl_sporocilo.ORM_O01_PATIENT.pid.pid_8 = dobi_pacienta.spol
-
     for slikanje in pregled.tipSlikanja.all():
         obr = core.Segment('OBR')
-        obr.obr_4 = slikanje.koda
+        obr.obr_4 = str(slikanje.koda) + '^' + slikanje.opis + ' (' + str(slikanje.SPS_koda) + ')'
         obr.obr_39 = slikanje.opis
+        obr.obr_43 = '^' + dobi_pacienta.priimek + ',' + dobi_pacienta.ime
         hl_sporocilo.add(obr)
 
     posljiSporocilo(hl_sporocilo)
